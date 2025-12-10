@@ -14,19 +14,22 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql://postgres:postgres@db:5432/scinewsai"
     
-    # Supabase Configuration
+    # Supabase Configuration (Recommended for production)
     SUPABASE_URL: str = ""
     SUPABASE_KEY: str = ""
-    USE_SUPABASE: bool = False
+    USE_SUPABASE: bool = os.getenv("USE_SUPABASE", "false").lower() == "true"
     
     # Security
-    SECRET_KEY: str = "your-super-secret-key-change-in-production"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-super-secret-key-change-in-production")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # CORS
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:8080"
+    CORS_ORIGINS: str = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:8080"
+    )
     
     # External APIs
     ARXIV_API_URL: str = "http://export.arxiv.org/api/query"
