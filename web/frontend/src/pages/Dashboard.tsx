@@ -3,7 +3,8 @@ import { Layout } from '@/components/layout/Layout';
 import { ArticleCard } from '@/components/articles/ArticleCard';
 import { SearchBar } from '@/components/search/SearchBar';
 import { useAuth } from '@/contexts/AuthContext';
-import { articlesApi, topicsApi, usersApi, likesApi } from '@/lib/apiService';
+import { useArticles } from '@/contexts/ArticlesContext';
+import { topicsApi, likesApi } from '@/lib/apiService';
 import { Article, Topic } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
@@ -12,44 +13,42 @@ import { toast } from '@/hooks/use-toast';
 
 export default function Dashboard() {
   const { user, setUser } = useAuth();
-  const [articles, setArticles] = useState<Article[]>([]);
+  const { articles, loading, error: articlesError, fetchArticles } = useArticles();
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [topicsLoading, setTopicsLoading] = useState(true);
   const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
   const [likedArticles, setLikedArticles] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set(['all'])); // 'all', 'liked', or topic IDs
-  const [loading, setLoading] = useState(true);
+  const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set(['all']));
   const [error, setError] = useState<string | null>(null);
 
   const subscribedTopics = user?.subscribed_topics || [];
   const subscribedTopicObjects = topics.filter((t) => subscribedTopics.includes(t.id));
 
+  // Fetch articles and topics on mount
   useEffect(() => {
     const loadData = async () => {
       try {
-        setLoading(true);
         setError(null);
-        const [articlesData, topicsData] = await Promise.all([
-          articlesApi.getAll({ page: 1, page_size: 50 }),
-          topicsApi.getAll(),
-        ]);
         
-        // Handle articles response - could be { articles: [], total, page, page_size } or array
-        const articlesList = articlesData.articles || articlesData.items || articlesData || [];
-        setArticles(Array.isArray(articlesList) ? articlesList : []);
+        // Fetch articles (uses cache if available)
+        await fetchArticles();
+
+        // Always fetch topics (lightweight)
+        setTopicsLoading(true);
+        const topicsData = await topicsApi.getAll();
         setTopics(Array.isArray(topicsData) ? topicsData : []);
 
         // Load likes status for all articles
-        if (Array.isArray(articlesList) && articlesList.length > 0) {
+        if (Array.isArray(articles) && articles.length > 0) {
           const likedIds: string[] = [];
-          for (const article of articlesList) {
+          for (const article of articles) {
             try {
               const likeData = await likesApi.getStatus(article.id);
               if (likeData.is_liked) {
                 likedIds.push(article.id);
               }
             } catch (err) {
-              // Skip if error loading like status
               console.error(`Error loading like status for article ${article.id}:`, err);
             }
           }
@@ -58,11 +57,10 @@ export default function Dashboard() {
       } catch (err: any) {
         console.error('Error loading data:', err);
         
-        // Check if it's an auth error
         if (err?.response?.status === 401) {
           setError('Sua sessão expirou. Por favor, faça login novamente.');
         } else {
-          setError('Erro ao carregar artigos. Tente novamente.');
+          setError('Erro ao carregar dados. Tente novamente.');
         }
         
         toast({
@@ -71,12 +69,12 @@ export default function Dashboard() {
           variant: 'destructive',
         });
       } finally {
-        setLoading(false);
+        setTopicsLoading(false);
       }
     };
 
     loadData();
-  }, []);
+  }, [fetchArticles]);
 
   useEffect(() => {
     let filtered = Array.isArray(articles) ? articles : [];
@@ -255,7 +253,7 @@ export default function Dashboard() {
             )}
 
             {/* Invitation to subscribe to topics */}
-            {subscribedTopicObjects.length === 0 && (
+            {!topicsLoading && subscribedTopicObjects.length === 0 && (
               <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 mt-4">
                 <div className="flex items-start gap-3">
                   <div className="flex-1">
