@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, ProfileType } from '@/types';
 import { authApi } from '@/lib/apiService';
+import { setLogoutCallback } from '@/lib/authCallbacks';
 
 interface AuthContextType {
   user: User | null;
@@ -152,7 +153,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    // Redirect to auth page using window.location for compatibility
+    window.location.href = '/auth';
   };
+
+  // Register logout callback for use in API interceptor
+  useEffect(() => {
+    setLogoutCallback(logout);
+  }, [logout]);
 
   const updateProfile = (updates: Partial<User>) => {
     if (user) {
