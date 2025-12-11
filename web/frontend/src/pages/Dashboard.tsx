@@ -253,6 +253,25 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
+
+            {/* Invitation to subscribe to topics */}
+            {subscribedTopicObjects.length === 0 && (
+              <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 mt-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-foreground mb-1">Personalize sua experiência!</h3>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Inscreva-se em tópicos de seu interesse para receber artigos relevantes e personalizados.
+                    </p>
+                    <Link to="/topics">
+                      <button className="text-sm font-medium text-accent hover:text-accent/80 transition-colors">
+                        Explorar tópicos →
+                      </button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
