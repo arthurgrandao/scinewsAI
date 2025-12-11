@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { ArticleCard } from '@/components/articles/ArticleCard';
 import { SearchBar } from '@/components/search/SearchBar';
-import { TopicBadge } from '@/components/topics/TopicBadge';
 import { useAuth } from '@/contexts/AuthContext';
-import { articlesApi, topicsApi, usersApi } from '@/lib/apiService';
+import { articlesApi, topicsApi, usersApi, likesApi } from '@/lib/apiService';
 import { Article, Topic } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
-import { BookOpen, Compass, Bell, Loader2 } from 'lucide-react';
+import { BookOpen, Compass, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export default function Dashboard() {
@@ -16,12 +15,14 @@ export default function Dashboard() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
+  const [likedArticles, setLikedArticles] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTopicFilter, setSelectedTopicFilter] = useState<string | null>(null);
+  const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set(['all'])); // 'all', 'liked', or topic IDs
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const subscribedTopics = user?.subscribed_topics || [];
+  const subscribedTopicObjects = topics.filter((t) => subscribedTopics.includes(t.id));
 
   useEffect(() => {
     const loadData = async () => {
@@ -37,6 +38,23 @@ export default function Dashboard() {
         const articlesList = articlesData.articles || articlesData.items || articlesData || [];
         setArticles(Array.isArray(articlesList) ? articlesList : []);
         setTopics(Array.isArray(topicsData) ? topicsData : []);
+
+        // Load likes status for all articles
+        if (Array.isArray(articlesList) && articlesList.length > 0) {
+          const likedIds: string[] = [];
+          for (const article of articlesList) {
+            try {
+              const likeData = await likesApi.getStatus(article.id);
+              if (likeData.is_liked) {
+                likedIds.push(article.id);
+              }
+            } catch (err) {
+              // Skip if error loading like status
+              console.error(`Error loading like status for article ${article.id}:`, err);
+            }
+          }
+          setLikedArticles(likedIds);
+        }
       } catch (err: any) {
         console.error('Error loading data:', err);
         
@@ -78,79 +96,99 @@ export default function Dashboard() {
       );
     }
 
-    if (selectedTopicFilter) {
-      // Find the topic object to get its description for better matching
-      const selectedTopic = topics.find(t => t.slug === selectedTopicFilter);
-      if (selectedTopic) {
-        filtered = filtered.filter((article) => {
-          // Match by topic name in keywords or description similarity
-          const topicNameLower = selectedTopic.name.toLowerCase();
-          const topicDescLower = selectedTopic.description?.toLowerCase() || '';
+    // Apply filters cumulatively
+    if (selectedFilters.size > 0 && !selectedFilters.has('all')) {
+      filtered = filtered.filter((article) => {
+        let matches = false;
+
+        // Check if article is in liked articles (if 'liked' filter is selected)
+        if (selectedFilters.has('liked') && likedArticles.includes(article.id)) {
+          matches = true;
+        }
+
+        // Check if article matches any selected topic
+        for (const filterId of selectedFilters) {
+          if (filterId === 'liked') continue;
           
-          return (
-            article.keywords.some((k) => 
-              k.toLowerCase().includes(selectedTopic.name.toLowerCase()) ||
-              topicNameLower.includes(k.toLowerCase())
-            ) ||
-            article.title.toLowerCase().includes(topicNameLower) ||
-            article.abstract.toLowerCase().includes(topicNameLower)
-          );
-        });
-      }
+          const selectedTopic = topics.find(t => t.id === filterId);
+          if (selectedTopic) {
+            const topicNameLower = selectedTopic.name.toLowerCase();
+            
+            if (
+              article.keywords.some((k) => 
+                k.toLowerCase().includes(selectedTopic.name.toLowerCase()) ||
+                topicNameLower.includes(k.toLowerCase())
+              ) ||
+              article.title.toLowerCase().includes(topicNameLower) ||
+              article.abstract.toLowerCase().includes(topicNameLower)
+            ) {
+              matches = true;
+              break;
+            }
+          }
+        }
+
+        return matches;
+      });
     }
 
     setFilteredArticles(filtered);
-  }, [searchQuery, selectedTopicFilter, articles, topics]);
+  }, [searchQuery, selectedFilters, articles, topics, likedArticles]);
 
-  const handleSubscribeTopic = async (topicId: string) => {
-    try {
-      const updatedUser = await usersApi.subscribeTopic(topicId);
-      setUser(updatedUser);
-      toast({
-        title: 'Inscrito!',
-        description: 'Você agora receberá atualizações sobre este tópico.',
-      });
-    } catch (err: any) {
-      console.error('Error subscribing to topic:', err);
-      
-      // Check if already subscribed
-      if (err?.response?.status === 400) {
-        toast({
-          title: 'Já inscrito',
-          description: 'Você já está inscrito neste tópico.',
-          variant: 'destructive',
-        });
-      } else {
-        const errorMsg = err?.response?.data?.detail || err?.message || 'Falha ao se inscrever no tópico.';
-        toast({
-          title: 'Erro',
-          description: errorMsg,
-          variant: 'destructive',
-        });
+  const handleArticleLikeChanged = (articleId: string, isLiked: boolean) => {
+    setLikedArticles((prev) => {
+      if (isLiked && !prev.includes(articleId)) {
+        return [...prev, articleId];
+      } else if (!isLiked && prev.includes(articleId)) {
+        return prev.filter((id) => id !== articleId);
       }
-    }
+      return prev;
+    });
   };
 
-  const handleUnsubscribeTopic = async (topicId: string) => {
-    try {
-      const updatedUser = await usersApi.unsubscribeTopic(topicId);
-      setUser(updatedUser);
-      toast({
-        title: 'Desinscrito!',
-        description: 'Você não receberá mais atualizações sobre este tópico.',
-      });
-    } catch (err: any) {
-      console.error('Error unsubscribing from topic:', err);
-      const errorMsg = err?.response?.data?.detail || err?.message || 'Falha ao se desinscrever do tópico.';
-      toast({
-        title: 'Erro',
-        description: errorMsg,
-        variant: 'destructive',
-      });
-    }
-  };
+  const toggleFilter = (filterId: string) => {
+    setSelectedFilters((prev) => {
+      const newFilters = new Set(prev);
 
-  const hasSubscriptions = subscribedTopics.length > 0;
+      // If clicking 'all', clear all filters and select only 'all'
+      if (filterId === 'all') {
+        return new Set(['all']);
+      }
+
+      // If 'all' is selected and clicking another filter, remove 'all' and add the new filter
+      if (newFilters.has('all')) {
+        newFilters.delete('all');
+      }
+
+      // Toggle the selected filter
+      if (newFilters.has(filterId)) {
+        newFilters.delete(filterId);
+        // If no filters are selected, select 'all'
+        if (newFilters.size === 0) {
+          newFilters.add('all');
+        }
+      } else {
+        newFilters.add(filterId);
+      }
+
+      // Check if all subscribed topics are selected (excluding 'all' and 'liked')
+      const allTopicsSelected = subscribedTopicObjects.every((topic) =>
+        newFilters.has(topic.id)
+      );
+      const onlyTopicsSelected =
+        newFilters.size === subscribedTopicObjects.length &&
+        subscribedTopicObjects.every((topic) => newFilters.has(topic.id)) &&
+        !newFilters.has('all') &&
+        !newFilters.has('liked');
+
+      // If all subscribed topics are selected and nothing else, reset to 'all'
+      if (allTopicsSelected && onlyTopicsSelected) {
+        return new Set(['all']);
+      }
+
+      return newFilters;
+    });
+  };
 
   return (
     <Layout>
@@ -177,53 +215,46 @@ export default function Dashboard() {
             {/* Separator Line */}
             <div className="flex items-center gap-3 pt-2">
               <div className="flex-1 h-0.5 bg-gradient-to-r from-accent to-transparent"></div>
-              <span className="text-sm font-semibold text-accent whitespace-nowrap">Filtrar por Tópico</span>
+              <span className="text-sm font-semibold text-accent whitespace-nowrap">Meus Filtros</span>
               <div className="flex-1 h-0.5 bg-gradient-to-l from-accent to-transparent"></div>
             </div>
             
-            <button
-              onClick={() => setSelectedTopicFilter(null)}
-              className={`topic-badge w-full ${!selectedTopicFilter ? 'subscribed' : ''}`}
-            >
-              Todos os tópicos
-            </button>
-            <div className="flex flex-wrap gap-2">
-              {topics.map((topic) => (
-                <button
-                  key={topic.id}
-                  onClick={() => setSelectedTopicFilter(topic.slug)}
-                  className={`topic-badge ${selectedTopicFilter === topic.slug ? 'subscribed' : ''}`}
-                  title={topic.description}
-                >
-                  {topic.name}
-                </button>
-              ))}
+            {/* Main filters - side by side */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => toggleFilter('all')}
+                className={`topic-badge ${selectedFilters.has('all') ? 'subscribed' : ''}`}
+              >
+                Todos os artigos
+              </button>
+
+              <button
+                onClick={() => toggleFilter('liked')}
+                className={`topic-badge ${selectedFilters.has('liked') ? 'subscribed' : ''}`}
+              >
+                ❤️ Curtidos
+              </button>
             </div>
+
+            {subscribedTopicObjects.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold text-muted-foreground mb-2">Tópicos Inscritos</div>
+                <div className="flex flex-wrap gap-2">
+                  {subscribedTopicObjects.map((topic) => (
+                    <button
+                      key={topic.id}
+                      onClick={() => toggleFilter(topic.id)}
+                      className={`topic-badge ${selectedFilters.has(topic.id) ? 'subscribed' : ''}`}
+                      title={topic.description}
+                    >
+                      {topic.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Subscribed Topics Section */}
-        {hasSubscriptions && (
-          <div className="mb-8 p-6 bg-secondary/50 rounded-lg border border-border">
-            <div className="flex items-center gap-2 mb-4">
-              <Bell className="h-5 w-5 text-accent" />
-              <h2 className="font-serif text-lg font-semibold">Suas Inscrições</h2>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {subscribedTopics.map((topicId) => {
-                const topic = topics.find((t) => t.id === topicId);
-                return topic ? (
-                  <TopicBadge
-                    key={topic.id}
-                    name={topic.name}
-                    isSubscribed={true}
-                    onToggle={() => handleUnsubscribeTopic(topic.id)}
-                  />
-                ) : null;
-              })}
-            </div>
-          </div>
-        )}
 
         {/* Articles Grid */}
         <div className="space-y-6">
@@ -252,7 +283,12 @@ export default function Dashboard() {
           ) : filteredArticles.length > 0 ? (
             <div className="grid md:grid-cols-2 gap-6">
               {filteredArticles.map((article) => (
-                <ArticleCard key={article.id} article={article} />
+                <ArticleCard 
+                  key={article.id} 
+                  article={article}
+                  isLiked={likedArticles.includes(article.id)}
+                  onLikeChange={handleArticleLikeChanged}
+                />
               ))}
             </div>
           ) : (

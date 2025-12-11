@@ -5,7 +5,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Create profile type enum
-CREATE TYPE profile_type AS ENUM ('STUDENT', 'EDUCATOR', 'ENTHUSIAST');
+CREATE TYPE profile_type AS ENUM ('STUDENT', 'EDUCATOR', 'ENTHUSIAST', 'student', 'educator', 'enthusiast');
 
 -- Users table
 CREATE TABLE IF NOT EXISTS users (

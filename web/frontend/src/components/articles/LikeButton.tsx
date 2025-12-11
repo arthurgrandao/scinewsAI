@@ -8,9 +8,10 @@ interface LikeButtonProps {
   articleId: string;
   size?: 'sm' | 'md' | 'lg';
   variant?: 'default' | 'outline' | 'ghost';
+  onLikeChange?: (articleId: string, isLiked: boolean) => void;
 }
 
-export function LikeButton({ articleId, size = 'md', variant = 'outline' }: LikeButtonProps) {
+export function LikeButton({ articleId, size = 'md', variant = 'outline', onLikeChange }: LikeButtonProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -50,6 +51,7 @@ export function LikeButton({ articleId, size = 'md', variant = 'outline' }: Like
         await likesApi.unlike(articleId);
         setIsLiked(false);
         setLikeCount((prev) => Math.max(0, prev - 1));
+        onLikeChange?.(articleId, false);
         toast({
           title: 'Sucesso',
           description: 'Você removeu a curtida',
@@ -58,6 +60,7 @@ export function LikeButton({ articleId, size = 'md', variant = 'outline' }: Like
         await likesApi.like(articleId);
         setIsLiked(true);
         setLikeCount((prev) => prev + 1);
+        onLikeChange?.(articleId, true);
         toast({
           title: 'Sucesso',
           description: 'Você curtiu este artigo!',
@@ -77,6 +80,7 @@ export function LikeButton({ articleId, size = 'md', variant = 'outline' }: Like
         if (!isLiked) {
           setIsLiked(true);
           setLikeCount((prev) => prev + 1);
+          onLikeChange?.(articleId, true);
         }
       } else {
         toast({
