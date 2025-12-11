@@ -98,6 +98,19 @@ export default function Profile() {
   const handleTopicToggle = async (topicId: string, topicName: string) => {
     const isSubscribed = subscribedTopics.includes(topicId);
     
+    // Optimistic update
+    const optimisticSubscribedTopics = isSubscribed
+      ? subscribedTopics.filter((id) => id !== topicId)
+      : [...subscribedTopics, topicId];
+    
+    setUser((prevUser) => {
+      if (!prevUser) return prevUser;
+      return {
+        ...prevUser,
+        subscribed_topics: optimisticSubscribedTopics,
+      };
+    });
+    
     try {
       setTogglingTopics((prev) => new Set(prev).add(topicId));
       
@@ -119,6 +132,15 @@ export default function Profile() {
       setUser(updatedUser);
     } catch (err: any) {
       console.error('Error toggling topic subscription:', err);
+      
+      // Revert optimistic update on error
+      setUser((prevUser) => {
+        if (!prevUser) return prevUser;
+        return {
+          ...prevUser,
+          subscribed_topics: subscribedTopics,
+        };
+      });
       
       // If already subscribed error, just update the user state
       if (err?.response?.status === 400 && err?.response?.data?.detail === "Already subscribed to this topic") {

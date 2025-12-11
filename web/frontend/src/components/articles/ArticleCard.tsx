@@ -22,9 +22,21 @@ export function ArticleCard({ article, isLiked = false, onLikeChange }: ArticleC
     
     if (isLoading) return;
 
+    const newLikeState = !isCurrentlyLiked;
+
+    // Optimistic update
+    setIsCurrentlyLiked(newLikeState);
+    onLikeChange?.(article.id, newLikeState);
+
+    toast({
+      title: newLikeState ? 'Curtido!' : 'Descurtido',
+      description: newLikeState
+        ? 'Você curtiu este artigo!'
+        : 'Você removeu a curtida',
+    });
+
     try {
       setIsLoading(true);
-      const newLikeState = !isCurrentlyLiked;
 
       // Call API to like/unlike
       if (newLikeState) {
@@ -32,19 +44,12 @@ export function ArticleCard({ article, isLiked = false, onLikeChange }: ArticleC
       } else {
         await likesApi.unlike(article.id);
       }
-
-      // Update local state
-      setIsCurrentlyLiked(newLikeState);
-      onLikeChange?.(article.id, newLikeState);
-
-      toast({
-        title: newLikeState ? 'Curtido!' : 'Descurtido',
-        description: newLikeState
-          ? 'Você curtiu este artigo!'
-          : 'Você removeu a curtida',
-      });
     } catch (error: any) {
       console.error('Error toggling like:', error);
+
+      // Revert optimistic update on error
+      setIsCurrentlyLiked(!newLikeState);
+      onLikeChange?.(article.id, !newLikeState);
 
       if (error.response?.status === 401) {
         toast({
