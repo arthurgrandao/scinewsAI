@@ -13,7 +13,7 @@ import { toast } from '@/hooks/use-toast';
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { articles, loading, hasMore, fetchArticles, fetchNextPage, searchArticles } = useArticles();
+  const { articles, loading, hasMore, fetchArticles, fetchNextPage, searchArticles, showOnlySubscribed, setShowOnlySubscribed } = useArticles();
   const { likedArticles, fetchUserLikes } = useLikes();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [topicsLoading, setTopicsLoading] = useState(true);
@@ -86,7 +86,29 @@ export default function Dashboard() {
   useEffect(() => {
     let filtered = Array.isArray(articles) ? [...articles] : [];
 
-    // Apply filters cumulatively
+    // If showing only subscribed topics, filter first
+    if (showOnlySubscribed && subscribedTopicObjects.length > 0) {
+      filtered = filtered.filter((article) => {
+        // Check if article matches any subscribed topic
+        for (const subscribedTopic of subscribedTopicObjects) {
+          const topicNameLower = subscribedTopic.name.toLowerCase();
+          
+          if (
+            article.keywords.some((k) => 
+              k.toLowerCase().includes(subscribedTopic.name.toLowerCase()) ||
+              topicNameLower.includes(k.toLowerCase())
+            ) ||
+            article.title.toLowerCase().includes(topicNameLower) ||
+            article.abstract.toLowerCase().includes(topicNameLower)
+          ) {
+            return true;
+          }
+        }
+        return false;
+      });
+    }
+
+    // Apply additional filters
     if (selectedFilters.size > 0 && !selectedFilters.has('all')) {
       filtered = filtered.filter((article) => {
         let matches = false;
@@ -123,7 +145,7 @@ export default function Dashboard() {
     }
 
     setFilteredArticles(filtered);
-  }, [selectedFilters, articles, topics, likedArticles]);
+  }, [selectedFilters, articles, topics, likedArticles, showOnlySubscribed, subscribedTopicObjects]);
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
@@ -208,12 +230,22 @@ export default function Dashboard() {
             </div>
             
             {/* Main filters - side by side */}
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
               <button
-                onClick={() => toggleFilter('all')}
-                className={`topic-badge ${selectedFilters.has('all') ? 'subscribed' : ''}`}
+                onClick={() => {
+                  setShowOnlySubscribed(false);
+                  setSelectedFilters(new Set(['all']));
+                }}
+                className={`topic-badge ${selectedFilters.has('all') && !showOnlySubscribed ? 'subscribed' : ''}`}
               >
-                Todos os artigos
+                📰 Todos os artigos
+              </button>
+
+              <button
+                onClick={() => setShowOnlySubscribed(!showOnlySubscribed)}
+                className={`topic-badge ${showOnlySubscribed ? 'subscribed' : ''}`}
+              >
+                ⭐ Apenas meus tópicos
               </button>
 
               <button
@@ -222,6 +254,19 @@ export default function Dashboard() {
               >
                 ❤️ Curtidos
               </button>
+
+              {(selectedFilters.size > 1 || (selectedFilters.size === 1 && !selectedFilters.has('all')) || showOnlySubscribed) && (
+                <button
+                  onClick={() => {
+                    setSelectedFilters(new Set(['all']));
+                    setShowOnlySubscribed(false);
+                    setSearchQuery('');
+                  }}
+                  className="topic-badge text-red-600 dark:text-red-400 border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                >
+                  ✕ Limpar
+                </button>
+              )}
             </div>
 
             {subscribedTopicObjects.length > 0 && (

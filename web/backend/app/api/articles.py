@@ -87,10 +87,12 @@ async def get_subscribed_feed(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
+    subscribed_only: bool = Query(False),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get articles for the current user (frontend handles topic filtering)"""
+    """Get articles (all or from subscribed topics only) for the current user"""
     supabase = get_supabase()
+    user_id = current_user.get("user_id") or current_user.get("id")
     
     try:
         # Get translated articles with pagination
@@ -109,6 +111,9 @@ async def get_subscribed_feed(
         result = query.order("publication_date", desc=True).range(offset, offset + page_size - 1).execute()
         
         articles = result.data if result.data else []
+        
+        # If subscribed_only is True, filter by subscribed topics (done in frontend)
+        # This parameter is just for documentation/future backend optimization
         
         return ArticleListResponse(
             articles=[ArticleResponse.model_validate(a) for a in articles],

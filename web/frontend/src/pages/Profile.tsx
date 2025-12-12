@@ -23,20 +23,20 @@ import {
 const profileTypes: { value: ProfileType; label: string; description: string; icon: React.ElementType }[] = [
   {
     value: 'student',
-    label: 'Student',
-    description: 'Learning and exploring the field',
+    label: 'Estudante',
+    description: 'Aprendendo e explorando a área',
     icon: GraduationCap,
   },
   {
     value: 'educator',
-    label: 'Educator',
-    description: 'Teaching and sharing knowledge',
+    label: 'Educador',
+    description: 'Ensinando e compartilhando conhecimento',
     icon: Briefcase,
   },
   {
     value: 'enthusiast',
-    label: 'Enthusiast',
-    description: 'Curious about technology',
+    label: 'Entusiasta',
+    description: 'Curioso sobre tecnologia',
     icon: Heart,
   },
 ];
@@ -218,7 +218,7 @@ export default function Profile() {
                   className="bg-muted"
                 />
                 <p className="text-xs text-muted-foreground">
-                  O e-mail não pôde ser alterado
+                  O e-mail não pode ser alterado
                 </p>
               </div>
 

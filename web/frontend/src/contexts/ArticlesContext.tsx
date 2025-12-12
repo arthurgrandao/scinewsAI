@@ -12,6 +12,8 @@ interface ArticlesContextType {
   fetchNextPage: () => Promise<void>;
   searchArticles: (query: string) => Promise<void>;
   resetPagination: () => void;
+  showOnlySubscribed: boolean;
+  setShowOnlySubscribed: (value: boolean) => void;
 }
 
 const ArticlesContext = createContext<ArticlesContextType | undefined>(undefined);
@@ -25,6 +27,7 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalArticles, setTotalArticles] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showOnlySubscribed, setShowOnlySubscribed] = useState(false);
 
   const hasMore = articles.length < totalArticles;
 
@@ -39,9 +42,7 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
         ...(search && { search }),
       };
 
-      // Use subscribed/feed endpoint which returns all translated articles
       const data = await articlesApi.getSubscribedFeed(params);
-
       const articlesList = data.articles || data.items || [];
       setTotalArticles(data.total || 0);
 
@@ -83,6 +84,11 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
     setTotalArticles(0);
   }, []);
 
+  const handleSetShowOnlySubscribed = useCallback((value: boolean) => {
+    setShowOnlySubscribed(value);
+    resetPagination();
+  }, [resetPagination]);
+
   return (
     <ArticlesContext.Provider
       value={{
@@ -95,6 +101,8 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
         fetchNextPage,
         searchArticles,
         resetPagination,
+        showOnlySubscribed,
+        setShowOnlySubscribed: handleSetShowOnlySubscribed,
       }}
     >
       {children}
