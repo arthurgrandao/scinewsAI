@@ -5,9 +5,9 @@ export function Footer() {
   return (
     <footer className="border-t border-border bg-secondary/30">
       <div className="container py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-8">
           {/* Brand */}
-          <div className="md:col-span-2">
+          <div className="md:col-span-3 lg:col-span-2">
             <div className="flex items-center gap-2 mb-4">
               <BookOpen className="h-6 w-6 text-accent" />
               <span className="font-serif text-xl font-semibold">SciNewsAI</span>
@@ -18,23 +18,25 @@ export function Footer() {
             </p>
           </div>
 
-          {/* Links */}
-          <div>
-            <h4 className="font-serif font-semibold mb-4">Plataforma</h4>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><Link to="/dashboard" className="hover:text-foreground transition-colors">Buscar Artigos</Link></li>
-              <li><Link to="/topics" className="hover:text-foreground transition-colors">Tópicos</Link></li>
-              <li><Link to="/auth?mode=signup" className="hover:text-foreground transition-colors">Inscrever-se</Link></li>
-            </ul>
-          </div>
+          {/* Platform & Resources on mobile, separated on desktop */}
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-2 md:gap-8 md:col-span-3 lg:col-span-2">
+            <div>
+              <h4 className="font-serif font-semibold mb-4">Plataforma</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><Link to="/dashboard" className="hover:text-foreground transition-colors">Buscar Artigos</Link></li>
+                <li><Link to="/topics" className="hover:text-foreground transition-colors">Tópicos</Link></li>
+                <li><Link to="/auth?mode=signup" className="hover:text-foreground transition-colors">Inscrever-se</Link></li>
+              </ul>
+            </div>
 
-          <div>
-            <h4 className="font-serif font-semibold mb-4">Recursos</h4>
-            <ul className="space-y-2 text-sm text-muted-foreground">
-              <li><a href="https://arxiv.org" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">arXiv</a></li>
-              <li><Link to="/about" className="hover:text-foreground transition-colors">Sobre</Link></li>
-              <li><Link to="/contact" className="hover:text-foreground transition-colors">Contato</Link></li>
-            </ul>
+            <div>
+              <h4 className="font-serif font-semibold mb-4">Recursos</h4>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li><a href="https://arxiv.org" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">arXiv</a></li>
+                <li><Link to="/about" className="hover:text-foreground transition-colors">Sobre</Link></li>
+                <li><Link to="/contact" className="hover:text-foreground transition-colors">Contato</Link></li>
+              </ul>
+            </div>
           </div>
         </div>
 

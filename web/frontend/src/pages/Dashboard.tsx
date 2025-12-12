@@ -21,10 +21,40 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set(['all']));
   const [error, setError] = useState<string | null>(null);
+  const [topicsExpanded, setTopicsExpanded] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
+  const topicsContentRef = useRef<HTMLDivElement>(null);
+  const [topicsHeight, setTopicsHeight] = useState(0);
+  const [topicsAtEnd, setTopicsAtEnd] = useState(true);
 
   const subscribedTopics = user?.subscribed_topics || [];
   const subscribedTopicObjects = topics.filter((t) => subscribedTopics.includes(t.id));
+
+  // Update topics height when they change or when expanded
+  useEffect(() => {
+    if (topicsExpanded) {
+      // Fixed height to accommodate vertical scrolling
+      setTopicsHeight(280);
+      setTopicsAtEnd(false);
+    } else {
+      setTopicsHeight(0);
+    }
+  }, [topicsExpanded]);
+
+  // Detect scroll position in topics
+  useEffect(() => {
+    const topicsContainer = topicsContentRef.current;
+    if (!topicsContainer) return;
+
+    const handleScroll = () => {
+      const isAtEnd = 
+        topicsContainer.scrollHeight - topicsContainer.scrollTop - topicsContainer.clientHeight < 10;
+      setTopicsAtEnd(isAtEnd);
+    };
+
+    topicsContainer.addEventListener('scroll', handleScroll);
+    return () => topicsContainer.removeEventListener('scroll', handleScroll);
+  }, [topicsExpanded]);
 
   // Fetch articles, topics, and likes on mount
   useEffect(() => {
@@ -238,14 +268,14 @@ export default function Dashboard() {
                 }}
                 className={`topic-badge ${selectedFilters.has('all') && !showOnlySubscribed ? 'subscribed' : ''}`}
               >
-                📰 Todos os artigos
+                📰 Todos
               </button>
 
               <button
                 onClick={() => setShowOnlySubscribed(!showOnlySubscribed)}
                 className={`topic-badge ${showOnlySubscribed ? 'subscribed' : ''}`}
               >
-                ⭐ Apenas meus tópicos
+                ⭐ Meus tópicos
               </button>
 
               <button
@@ -272,7 +302,9 @@ export default function Dashboard() {
             {subscribedTopicObjects.length > 0 && (
               <div>
                 <div className="text-xs font-semibold text-muted-foreground mb-2">Tópicos Inscritos</div>
-                <div className="flex flex-wrap gap-2">
+                
+                {/* Desktop: Flex wrap | Mobile: Collapsible */}
+                <div className="hidden md:flex md:flex-wrap gap-2">
                   {subscribedTopicObjects.map((topic) => (
                     <button
                       key={topic.id}
@@ -283,6 +315,49 @@ export default function Dashboard() {
                       {topic.name}
                     </button>
                   ))}
+                </div>
+
+                {/* Mobile: Collapsible accordion */}
+                <div className="md:hidden">
+                  <button
+                    onClick={() => setTopicsExpanded(!topicsExpanded)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-md bg-secondary hover:bg-secondary/80 transition-colors mb-2"
+                  >
+                    <span className="text-sm font-medium">
+                      {subscribedTopicObjects.length} tópicos
+                    </span>
+                    <span className={`transition-transform duration-300 ${topicsExpanded ? 'rotate-180' : ''}`}>
+                      ▼
+                    </span>
+                  </button>
+
+                  {/* Expandable topics list with smooth animation */}
+                  <div
+                    className="overflow-hidden transition-all duration-300 ease-in-out relative"
+                    style={{
+                      maxHeight: `${topicsHeight}px`,
+                      opacity: topicsExpanded ? 1 : 0,
+                    }}
+                  >
+                    <div ref={topicsContentRef} className="max-h-64 overflow-y-auto pr-2">
+                      <div className="flex flex-wrap gap-2 pt-2 pb-4">
+                        {subscribedTopicObjects.map((topic) => (
+                          <button
+                            key={topic.id}
+                            onClick={() => toggleFilter(topic.id)}
+                            className={`topic-badge ${selectedFilters.has(topic.id) ? 'subscribed' : ''}`}
+                            title={topic.description}
+                          >
+                            {topic.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Gradient indicator for more content */}
+                    {subscribedTopicObjects.length > 6 && !topicsAtEnd && (
+                      <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-secondary to-transparent pointer-events-none rounded-b-md"></div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
