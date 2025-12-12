@@ -145,7 +145,7 @@ export default function Dashboard() {
     }
 
     setFilteredArticles(filtered);
-  }, [selectedFilters, articles, topics, likedArticles, showOnlySubscribed, subscribedTopicObjects]);
+  }, [selectedFilters, articles, topics, likedArticles, showOnlySubscribed]);
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
