@@ -13,6 +13,16 @@ export const articlesApi = {
     return response.data;
   },
 
+  // Get subscribed feed (articles from subscribed topics)
+  getSubscribedFeed: async (params?: {
+    page?: number;
+    page_size?: number;
+    search?: string;
+  }) => {
+    const response = await api.get('/api/articles/subscribed/feed', { params });
+    return response.data;
+  },
+
   // Get single article
   getById: async (id: string) => {
     const response = await api.get(`/api/articles/${id}/`);
@@ -141,6 +151,12 @@ export const likesApi = {
   // Get like status for an article
   getStatus: async (articleId: string) => {
     const response = await api.get(`/api/articles/${articleId}/like-status/`);
+    return response.data;
+  },
+
+  // Get all user's liked articles in one request
+  getUserLikes: async () => {
+    const response = await api.get(`/api/users/me/likes/`);
     return response.data;
   },
 

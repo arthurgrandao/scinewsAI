@@ -80,3 +80,43 @@ async def get_latest_articles(
         return [ArticleResponse.model_validate(a) for a in articles]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch articles: {str(e)}")
+
+
+@router.get("/subscribed/feed", response_model=ArticleListResponse)
+async def get_subscribed_feed(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get articles for the current user (frontend handles topic filtering)"""
+    supabase = get_supabase()
+    
+    try:
+        # Get translated articles with pagination
+        query = supabase.table("articles").select("*").eq("processing_status", "translated")
+        
+        if search:
+            # Search in title or abstract
+            query = query.or_(f"title.ilike.%{search}%,abstract.ilike.%{search}%")
+        
+        # Get total count
+        count_result = supabase.table("articles").select("id", count="exact").eq("processing_status", "translated").execute()
+        total = count_result.count if count_result.count else 0
+        
+        # Get paginated results
+        offset = (page - 1) * page_size
+        result = query.order("publication_date", desc=True).range(offset, offset + page_size - 1).execute()
+        
+        articles = result.data if result.data else []
+        
+        return ArticleListResponse(
+            articles=[ArticleResponse.model_validate(a) for a in articles],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to fetch articles: {str(e)}")

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { likesApi } from '@/lib/apiService';
+import { useLikes } from '@/contexts/LikesContext';
 import { toast } from '@/hooks/use-toast';
 
 interface LikeButtonProps {
@@ -12,31 +13,26 @@ interface LikeButtonProps {
 }
 
 export function LikeButton({ articleId, size = 'md', variant = 'outline', onLikeChange }: LikeButtonProps) {
-  const [isLiked, setIsLiked] = useState(false);
+  const { likedArticles, toggleLike, invalidateCache } = useLikes();
   const [likeCount, setLikeCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
-  // Load initial like status
+  const isLiked = likedArticles.has(articleId);
+
+  // Load initial like count
   useEffect(() => {
-    loadLikeStatus();
+    loadLikeCount();
   }, [articleId]);
 
-  const loadLikeStatus = async () => {
+  const loadLikeCount = async () => {
     try {
       setInitialLoading(true);
-      const data = await likesApi.getStatus(articleId);
-      setIsLiked(data.is_liked);
+      const data = await likesApi.getCount(articleId);
       setLikeCount(data.like_count);
     } catch (error) {
-      console.error('Error loading like status:', error);
-      // Try to load public count if not authenticated
-      try {
-        const data = await likesApi.getCount(articleId);
-        setLikeCount(data.like_count);
-      } catch (err) {
-        console.error('Error loading like count:', err);
-      }
+      console.error('Error loading like count:', error);
+      setLikeCount(0);
     } finally {
       setInitialLoading(false);
     }
@@ -49,18 +45,20 @@ export function LikeButton({ articleId, size = 'md', variant = 'outline', onLike
       setLoading(true);
       if (isLiked) {
         await likesApi.unlike(articleId);
-        setIsLiked(false);
+        toggleLike(articleId, false);
         setLikeCount((prev) => Math.max(0, prev - 1));
         onLikeChange?.(articleId, false);
+        invalidateCache();
         toast({
           title: 'Sucesso',
           description: 'Você removeu a curtida',
         });
       } else {
         await likesApi.like(articleId);
-        setIsLiked(true);
+        toggleLike(articleId, true);
         setLikeCount((prev) => prev + 1);
         onLikeChange?.(articleId, true);
+        invalidateCache();
         toast({
           title: 'Sucesso',
           description: 'Você curtiu este artigo!',
@@ -78,9 +76,10 @@ export function LikeButton({ articleId, size = 'md', variant = 'outline', onLike
       } else if (error.response?.status === 400) {
         // Already liked
         if (!isLiked) {
-          setIsLiked(true);
+          toggleLike(articleId, true);
           setLikeCount((prev) => prev + 1);
           onLikeChange?.(articleId, true);
+          invalidateCache();
         }
       } else {
         toast({

@@ -122,3 +122,24 @@ async def get_like_count_public(article_id: str):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get like count: {str(e)}")
+
+
+@router.get("/users/me/likes/", response_model=dict)
+async def get_user_likes(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all articles liked by the current user"""
+    supabase = get_supabase()
+    user_id = current_user.get("user_id") or current_user.get("id")
+    
+    try:
+        # Get all likes for the current user
+        likes = supabase.table("likes").select("article_id").eq("user_id", user_id).execute()
+        liked_article_ids = [like["article_id"] for like in likes.data] if likes.data else []
+        
+        return {
+            "liked_articles": liked_article_ids,
+            "count": len(liked_article_ids)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get user likes: {str(e)}")

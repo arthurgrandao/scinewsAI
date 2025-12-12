@@ -1,59 +1,47 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { ArticleCard } from '@/components/articles/ArticleCard';
 import { SearchBar } from '@/components/search/SearchBar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useArticles } from '@/contexts/ArticlesContext';
-import { topicsApi, likesApi } from '@/lib/apiService';
+import { useLikes } from '@/contexts/LikesContext';
+import { topicsApi } from '@/lib/apiService';
 import { Article, Topic } from '@/types';
-import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { BookOpen, Compass, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export default function Dashboard() {
-  const { user, setUser } = useAuth();
-  const { articles, loading, error: articlesError, fetchArticles } = useArticles();
+  const { user } = useAuth();
+  const { articles, loading, hasMore, fetchArticles, fetchNextPage, searchArticles } = useArticles();
+  const { likedArticles, fetchUserLikes } = useLikes();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [topicsLoading, setTopicsLoading] = useState(true);
   const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
-  const [likedArticles, setLikedArticles] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set(['all']));
   const [error, setError] = useState<string | null>(null);
+  const observerTarget = useRef<HTMLDivElement>(null);
 
   const subscribedTopics = user?.subscribed_topics || [];
   const subscribedTopicObjects = topics.filter((t) => subscribedTopics.includes(t.id));
 
-  // Fetch articles and topics on mount
+  // Fetch articles, topics, and likes on mount
   useEffect(() => {
     const loadData = async () => {
       try {
         setError(null);
         
-        // Fetch articles (uses cache if available)
+        // Fetch articles from subscribed feed
         await fetchArticles();
 
-        // Always fetch topics (lightweight)
+        // Always fetch topics
         setTopicsLoading(true);
         const topicsData = await topicsApi.getAll();
         setTopics(Array.isArray(topicsData) ? topicsData : []);
 
-        // Load likes status for all articles
-        if (Array.isArray(articles) && articles.length > 0) {
-          const likedIds: string[] = [];
-          for (const article of articles) {
-            try {
-              const likeData = await likesApi.getStatus(article.id);
-              if (likeData.is_liked) {
-                likedIds.push(article.id);
-              }
-            } catch (err) {
-              console.error(`Error loading like status for article ${article.id}:`, err);
-            }
-          }
-          setLikedArticles(likedIds);
-        }
+        // Fetch likes
+        await fetchUserLikes();
       } catch (err: any) {
         console.error('Error loading data:', err);
         
@@ -74,25 +62,29 @@ export default function Dashboard() {
     };
 
     loadData();
-  }, [fetchArticles]);
+  }, [fetchArticles, fetchUserLikes]);
 
+  // Infinite scroll observer
   useEffect(() => {
-    let filtered = Array.isArray(articles) ? articles : [];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1 }
+    );
 
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (article) =>
-          article.title.toLowerCase().includes(query) ||
-          article.abstract.toLowerCase().includes(query) ||
-          article.authors.some((author) =>
-            author.toLowerCase().includes(query)
-          ) ||
-          article.keywords.some((keyword) =>
-            keyword.toLowerCase().includes(query)
-          )
-      );
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
     }
+
+    return () => observer.disconnect();
+  }, [hasMore, loading, fetchNextPage]);
+
+  // Filter articles based on selected filters
+  useEffect(() => {
+    let filtered = Array.isArray(articles) ? [...articles] : [];
 
     // Apply filters cumulatively
     if (selectedFilters.size > 0 && !selectedFilters.has('all')) {
@@ -100,7 +92,7 @@ export default function Dashboard() {
         let matches = false;
 
         // Check if article is in liked articles (if 'liked' filter is selected)
-        if (selectedFilters.has('liked') && likedArticles.includes(article.id)) {
+        if (selectedFilters.has('liked') && likedArticles.has(article.id)) {
           matches = true;
         }
 
@@ -131,17 +123,15 @@ export default function Dashboard() {
     }
 
     setFilteredArticles(filtered);
-  }, [searchQuery, selectedFilters, articles, topics, likedArticles]);
+  }, [selectedFilters, articles, topics, likedArticles]);
+
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query);
+    await searchArticles(query);
+  };
 
   const handleArticleLikeChanged = (articleId: string, isLiked: boolean) => {
-    setLikedArticles((prev) => {
-      if (isLiked && !prev.includes(articleId)) {
-        return [...prev, articleId];
-      } else if (!isLiked && prev.includes(articleId)) {
-        return prev.filter((id) => id !== articleId);
-      }
-      return prev;
-    });
+    // Likes are already managed by context
   };
 
   const toggleFilter = (filterId: string) => {
@@ -204,7 +194,7 @@ export default function Dashboard() {
         {/* Search and Filters */}
         <div className="mb-8 space-y-4">
           <SearchBar
-            onSearch={setSearchQuery}
+            onSearch={handleSearch}
             placeholder="Busque artigos por título, autor ou palavra-chave..."
           />
 
@@ -281,7 +271,7 @@ export default function Dashboard() {
               Últimos Artigos
             </h2>
             <span className="text-sm text-muted-foreground">
-              {loading ? (
+              {loading && articles.length === 0 ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 `${filteredArticles.length} artigo${filteredArticles.length !== 1 ? 's' : ''}`
@@ -289,7 +279,7 @@ export default function Dashboard() {
             </span>
           </div>
 
-          {loading ? (
+          {loading && articles.length === 0 ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-accent" />
             </div>
@@ -298,15 +288,38 @@ export default function Dashboard() {
               <p className="text-destructive">{error}</p>
             </div>
           ) : filteredArticles.length > 0 ? (
-            <div className="grid md:grid-cols-2 gap-6">
-              {filteredArticles.map((article) => (
-                <ArticleCard 
-                  key={article.id} 
-                  article={article}
-                  isLiked={likedArticles.includes(article.id)}
-                  onLikeChange={handleArticleLikeChanged}
-                />
-              ))}
+            <>
+              <div className="grid md:grid-cols-2 gap-6">
+                {filteredArticles.map((article) => (
+                  <ArticleCard 
+                    key={article.id} 
+                    article={article}
+                    isLiked={likedArticles.has(article.id)}
+                    onLikeChange={handleArticleLikeChanged}
+                  />
+                ))}
+              </div>
+
+              {/* Infinite scroll observer */}
+              {hasMore && (
+                <div ref={observerTarget} className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-accent" />
+                </div>
+              )}
+            </>
+          ) : subscribedTopicObjects.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="flex justify-center mb-4">
+                <Compass className="h-12 w-12 text-muted-foreground/50" />
+              </div>
+              <p className="text-muted-foreground mb-4">
+                Você ainda não está inscrito em nenhum tópico.
+              </p>
+              <Link to="/topics">
+                <button className="text-sm font-medium text-accent hover:text-accent/80 transition-colors">
+                  Explorar tópicos →
+                </button>
+              </Link>
             </div>
           ) : (
             <div className="text-center py-12">

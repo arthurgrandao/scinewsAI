@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { useState } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { likesApi } from '@/lib/apiService';
+import { useLikes } from '@/contexts/LikesContext';
 
 interface ArticleCardProps {
   article: Article;
@@ -13,6 +14,7 @@ interface ArticleCardProps {
 }
 
 export function ArticleCard({ article, isLiked = false, onLikeChange }: ArticleCardProps) {
+  const { toggleLike, invalidateCache } = useLikes();
   const [isCurrentlyLiked, setIsCurrentlyLiked] = useState(isLiked);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -26,6 +28,7 @@ export function ArticleCard({ article, isLiked = false, onLikeChange }: ArticleC
 
     // Optimistic update
     setIsCurrentlyLiked(newLikeState);
+    toggleLike(article.id, newLikeState);
     onLikeChange?.(article.id, newLikeState);
 
     toast({
@@ -44,11 +47,15 @@ export function ArticleCard({ article, isLiked = false, onLikeChange }: ArticleC
       } else {
         await likesApi.unlike(article.id);
       }
+      
+      // Invalidate cache after successful like/unlike
+      invalidateCache();
     } catch (error: any) {
       console.error('Error toggling like:', error);
 
       // Revert optimistic update on error
       setIsCurrentlyLiked(!newLikeState);
+      toggleLike(article.id, !newLikeState);
       onLikeChange?.(article.id, !newLikeState);
 
       if (error.response?.status === 401) {
@@ -57,6 +64,13 @@ export function ArticleCard({ article, isLiked = false, onLikeChange }: ArticleC
           description: 'Você precisa estar logado para curtir artigos',
           variant: 'destructive',
         });
+      } else if (error.response?.status === 400) {
+        // Already liked - treat as success
+        const actualState = newLikeState;
+        setIsCurrentlyLiked(actualState);
+        toggleLike(article.id, actualState);
+        onLikeChange?.(article.id, actualState);
+        invalidateCache();
       } else {
         toast({
           title: 'Erro',
