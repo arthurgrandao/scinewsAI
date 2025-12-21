@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from '@/hooks/use-toast';
-import { topicsApi, usersApi } from '@/lib/apiService';
+import { usersApi } from '@/lib/apiService';
 import { Topic, ProfileType } from '@/types';
 import { 
   User, 
@@ -17,8 +17,10 @@ import {
   Bell,
   Check,
   X,
-  Loader2
+  Loader2,
+  ChevronDown
 } from 'lucide-react';
+import { useTopics, useSubscribeTopic, useUnsubscribeTopic } from '@/hooks/index';
 
 const profileTypes: { value: ProfileType; label: string; description: string; icon: React.ElementType }[] = [
   {
@@ -46,33 +48,33 @@ export default function Profile() {
   const [name, setName] = useState(user?.name || '');
   const [profileType, setProfileType] = useState<ProfileType>(user?.profile_type || 'student');
   const [isSaving, setIsSaving] = useState(false);
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [loadingTopics, setLoadingTopics] = useState(true);
   const [togglingTopics, setTogglingTopics] = useState<Set<string>>(new Set());
+  const [topicsExpanded, setTopicsExpanded] = useState(false);
+  const [topicsAtEnd, setTopicsAtEnd] = useState(true);
+  const topicsScrollRef = useRef<HTMLDivElement>(null);
+
+  // React Query hooks
+  const { data: topics = [], isLoading: loadingTopics } = useTopics();
+  const subscribeTopic = useSubscribeTopic();
+  const unsubscribeTopic = useUnsubscribeTopic();
 
   const subscribedTopics = user?.subscribed_topics || [];
   const subscribedTopicObjects = topics.filter(t => subscribedTopics.includes(t.id));
 
+  // Detect scroll position in topics
   useEffect(() => {
-    const loadTopics = async () => {
-      try {
-        setLoadingTopics(true);
-        const data = await topicsApi.getAll();
-        setTopics(data);
-      } catch (err) {
-        console.error('Error loading topics:', err);
-        toast({
-          title: 'Erro',
-          description: 'Falha ao carregar tópicos.',
-          variant: 'destructive',
-        });
-      } finally {
-        setLoadingTopics(false);
-      }
+    const topicsContainer = topicsScrollRef.current;
+    if (!topicsContainer) return;
+
+    const handleScroll = () => {
+      const isAtEnd = 
+        topicsContainer.scrollHeight - topicsContainer.scrollTop - topicsContainer.clientHeight < 10;
+      setTopicsAtEnd(isAtEnd);
     };
 
-    loadTopics();
-  }, []);
+    topicsContainer.addEventListener('scroll', handleScroll);
+    return () => topicsContainer.removeEventListener('scroll', handleScroll);
+  }, [topicsExpanded]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -114,22 +116,19 @@ export default function Profile() {
     try {
       setTogglingTopics((prev) => new Set(prev).add(topicId));
       
-      let updatedUser;
       if (isSubscribed) {
-        updatedUser = await usersApi.unsubscribeTopic(topicId);
+        await unsubscribeTopic.mutateAsync(topicId);
         toast({
           title: 'Desinscrito!',
           description: `Você se desinscreveu de ${topicName}`,
         });
       } else {
-        updatedUser = await usersApi.subscribeTopic(topicId);
+        await subscribeTopic.mutateAsync(topicId);
         toast({
           title: 'Inscrito!',
           description: `Você agora receberá atualizações sobre ${topicName}`,
         });
       }
-      
-      setUser(updatedUser);
     } catch (err: any) {
       console.error('Error toggling topic subscription:', err);
       
@@ -142,18 +141,11 @@ export default function Profile() {
         };
       });
       
-      // If already subscribed error, just update the user state
       if (err?.response?.status === 400 && err?.response?.data?.detail === "Already subscribed to this topic") {
-        try {
-          const currentUser = await usersApi.getCurrentUser();
-          setUser(currentUser);
-          toast({
-            title: 'Já inscrito',
-            description: 'Você já está inscrito neste tópico.',
-          });
-        } catch (refreshErr) {
-          console.error('Error refreshing user:', refreshErr);
-        }
+        toast({
+          title: 'Já inscrito',
+          description: 'Você já está inscrito neste tópico.',
+        });
       } else {
         toast({
           title: 'Erro',
@@ -270,62 +262,93 @@ export default function Profile() {
           <div>
             {/* Topic Subscriptions */}
             <div className="scholarly-card p-6">
-            <div className="flex items-center gap-2 mb-6">
-              <Bell className="h-5 w-5 text-accent" />
-              <h2 className="font-serif text-lg font-semibold">
-                Seus Tópicos Inscritos
-              </h2>
-            </div>
-            <p className="text-sm text-muted-foreground mb-6">
-              Tópicos nos quais você está inscrito. Você receberá newsletters semanais
-              sobre esses tópicos.
-            </p>
-
-            {loadingTopics ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-accent" />
-              </div>
-            ) : subscribedTopicObjects.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground mb-4">
-                  Você não está inscrito em nenhum tópico ainda.
-                </p>
-                <Button variant="scholarly" asChild>
-                  <a href="/topics">Explorar Tópicos</a>
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {subscribedTopicObjects.map((topic) => {
-                  const isToggling = togglingTopics.has(topic.id);
-                  return (
-                    <button
-                      key={topic.id}
-                      onClick={() => handleTopicToggle(topic.id, topic.name)}
-                      disabled={isToggling}
-                      className={`w-full flex items-center justify-between p-4 rounded-lg border transition-colors text-left disabled:opacity-50 ${
-                        'border-accent bg-accent/5'
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-accent" />
+                  <h2 className="font-serif text-lg font-semibold">
+                    Seus Tópicos Inscritos
+                  </h2>
+                </div>
+                {subscribedTopicObjects.length > 0 && (
+                  <button
+                    onClick={() => setTopicsExpanded(!topicsExpanded)}
+                    className="p-2 hover:bg-secondary rounded transition-colors"
+                  >
+                    <ChevronDown 
+                      className={`h-6 w-6 text-muted-foreground transition-transform duration-300 ${
+                        topicsExpanded ? 'rotate-180' : ''
                       }`}
-                    >
-                      <div>
-                        <div className="font-medium text-sm">{topic.name}</div>
-                      </div>
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                          isToggling ? '' : 'bg-accent text-accent-foreground'
-                        }`}
-                      >
-                        {isToggling ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <X className="h-3 w-3" />
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+                    />
+                  </button>
+                )}
               </div>
-            )}
+              
+              <p className="text-sm text-muted-foreground mb-6">
+                Tópicos nos quais você está inscrito. Você receberá newsletters semanais
+                sobre esses tópicos.
+              </p>
+
+              {loadingTopics ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-accent" />
+                </div>
+              ) : subscribedTopicObjects.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-4">
+                    Você não está inscrito em nenhum tópico ainda.
+                  </p>
+                  <Button variant="scholarly" asChild>
+                    <a href="/topics">Explorar Tópicos</a>
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  className="overflow-hidden transition-all duration-300 ease-in-out relative"
+                  style={{
+                    maxHeight: topicsExpanded ? '320px' : '0px',
+                    opacity: topicsExpanded ? 1 : 0,
+                  }}
+                >
+                  <div 
+                    ref={topicsScrollRef}
+                    className="h-80 overflow-y-auto pr-2 space-y-2"
+                  >
+                    {subscribedTopicObjects.map((topic) => {
+                      const isToggling = togglingTopics.has(topic.id);
+                      return (
+                        <button
+                          key={topic.id}
+                          onClick={() => handleTopicToggle(topic.id, topic.name)}
+                          disabled={isToggling}
+                          className={`w-full flex items-center justify-between p-4 rounded-lg border transition-colors text-left disabled:opacity-50 ${
+                            'border-accent bg-accent/5'
+                          }`}
+                        >
+                          <div>
+                            <div className="font-medium text-sm">{topic.name}</div>
+                          </div>
+                          <div
+                            className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+                              isToggling ? '' : 'bg-accent text-accent-foreground'
+                            }`}
+                          >
+                            {isToggling ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <X className="h-3 w-3" />
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Blur gradient when not at end */}
+                  {!topicsAtEnd && (
+                    <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-background via-background/60 to-transparent pointer-events-none rounded-b-md" />
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
