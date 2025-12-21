@@ -1,42 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { useAuth } from '@/contexts/AuthContext';
-import { topicsApi, usersApi } from '@/lib/apiService';
 import { Topic } from '@/types';
 import { Check, Plus, BookMarked, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useTopics, useSubscribeTopic, useUnsubscribeTopic } from '@/hooks/index';
 
 export default function Topics() {
   const { user, setUser } = useAuth();
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [togglingTopics, setTogglingTopics] = useState<Set<string>>(new Set());
+  
+  // React Query hooks
+  const { data: topics = [], isLoading, error } = useTopics();
+  const subscribeTopic = useSubscribeTopic();
+  const unsubscribeTopic = useUnsubscribeTopic();
 
   const subscribedTopics = user?.subscribed_topics || [];
-
-  useEffect(() => {
-    const loadTopics = async () => {
-      try {
-        setLoading(true);
-        const data = await topicsApi.getAll();
-        setTopics(data);
-        setError(null);
-      } catch (err) {
-        console.error('Error loading topics:', err);
-        setError('Erro ao carregar tópicos. Tente novamente.');
-        toast({
-          title: 'Erro',
-          description: 'Falha ao carregar tópicos.',
-          variant: 'destructive',
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadTopics();
-  }, []);
 
   const handleToggle = async (topicId: string, topicName: string) => {
     const isSubscribed = subscribedTopics.includes(topicId);
@@ -57,22 +36,19 @@ export default function Topics() {
     try {
       setTogglingTopics((prev) => new Set(prev).add(topicId));
       
-      let updatedUser;
       if (isSubscribed) {
-        updatedUser = await usersApi.unsubscribeTopic(topicId);
+        await unsubscribeTopic.mutateAsync(topicId);
         toast({
           title: 'Desinscrito!',
           description: `Você se desinscreveu de ${topicName}`,
         });
       } else {
-        updatedUser = await usersApi.subscribeTopic(topicId);
+        await subscribeTopic.mutateAsync(topicId);
         toast({
           title: 'Inscrito!',
           description: `Você agora receberá atualizações sobre ${topicName}`,
         });
       }
-      
-      setUser(updatedUser);
     } catch (err: any) {
       console.error('Error toggling topic subscription:', err);
       
@@ -85,24 +61,12 @@ export default function Topics() {
         };
       });
       
-      // If already subscribed error, just update the user state
+      // Handle already subscribed error
       if (err?.response?.status === 400 && err?.response?.data?.detail === "Already subscribed to this topic") {
-        // Refresh user to get current subscriptions from backend
-        try {
-          const currentUser = await usersApi.getCurrentUser();
-          setUser(currentUser);
-          toast({
-            title: 'Já inscrito',
-            description: 'Você já está inscrito neste tópico.',
-          });
-        } catch (refreshErr) {
-          console.error('Error refreshing user:', refreshErr);
-          toast({
-            title: 'Erro',
-            description: 'Falha ao atualizar inscrições.',
-            variant: 'destructive',
-          });
-        }
+        toast({
+          title: 'Já inscrito',
+          description: 'Você já está inscrito neste tópico.',
+        });
       } else {
         toast({
           title: 'Erro',
@@ -145,13 +109,15 @@ export default function Topics() {
         </div>
 
         {/* Topics Grid */}
-        {loading ? (
+        {isLoading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-accent" />
           </div>
         ) : error ? (
           <div className="text-center py-12">
-            <p className="text-destructive">{error}</p>
+            <p className="text-destructive">
+              {error instanceof Error ? error.message : 'Erro ao carregar tópicos. Tente novamente.'}
+            </p>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">

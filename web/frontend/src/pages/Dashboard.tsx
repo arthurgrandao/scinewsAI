@@ -1,39 +1,59 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { ArticleCard } from '@/components/articles/ArticleCard';
 import { SearchBar } from '@/components/search/SearchBar';
 import { useAuth } from '@/contexts/AuthContext';
-import { useArticles } from '@/contexts/ArticlesContext';
 import { useLikes } from '@/contexts/LikesContext';
-import { topicsApi } from '@/lib/apiService';
 import { Article, Topic } from '@/types';
 import { Link } from 'react-router-dom';
 import { BookOpen, Compass, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { useSubscribedFeed, useSearchArticles } from '@/hooks/useArticles';
+import { useTopics } from '@/hooks/useTopics';
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { articles, loading, hasMore, fetchArticles, fetchNextPage, searchArticles, showOnlySubscribed, setShowOnlySubscribed } = useArticles();
   const { likedArticles, fetchUserLikes } = useLikes();
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [topicsLoading, setTopicsLoading] = useState(true);
-  const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<Set<string>>(new Set(['all']));
-  const [error, setError] = useState<string | null>(null);
+  const [showOnlySubscribed, setShowOnlySubscribed] = useState(false);
   const [topicsExpanded, setTopicsExpanded] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
   const topicsContentRef = useRef<HTMLDivElement>(null);
   const [topicsHeight, setTopicsHeight] = useState(0);
   const [topicsAtEnd, setTopicsAtEnd] = useState(true);
 
+  // React Query hooks
+  const isSearching = searchQuery.length > 0;
+  const subscribedFeed = useSubscribedFeed(
+    { search: searchQuery },
+    !isSearching
+  );
+  const searchResults = useSearchArticles(searchQuery, isSearching);
+  const topicsQuery = useTopics();
+
+  // Use appropriate query based on search state
+  const activeQuery = isSearching ? searchResults : subscribedFeed;
+  const { data: topicsData = [] } = topicsQuery;
+  const topics = Array.isArray(topicsData) ? topicsData : [];
+
+  // Get all articles from paginated data
+  const allArticles = useMemo(() => {
+    if (!activeQuery.data?.pages) return [];
+    return activeQuery.data.pages.flatMap((page) => page.articles);
+  }, [activeQuery.data?.pages]);
+
   const subscribedTopics = user?.subscribed_topics || [];
   const subscribedTopicObjects = topics.filter((t) => subscribedTopics.includes(t.id));
+
+  // Fetch likes on mount
+  useEffect(() => {
+    fetchUserLikes();
+  }, []);
 
   // Update topics height when they change or when expanded
   useEffect(() => {
     if (topicsExpanded) {
-      // Fixed height to accommodate vertical scrolling
       setTopicsHeight(280);
       setTopicsAtEnd(false);
     } else {
@@ -56,50 +76,12 @@ export default function Dashboard() {
     return () => topicsContainer.removeEventListener('scroll', handleScroll);
   }, [topicsExpanded]);
 
-  // Fetch articles, topics, and likes on mount
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setError(null);
-        
-        // Fetch articles from subscribed feed
-        await fetchArticles();
-
-        // Always fetch topics
-        setTopicsLoading(true);
-        const topicsData = await topicsApi.getAll();
-        setTopics(Array.isArray(topicsData) ? topicsData : []);
-
-        // Fetch likes
-        await fetchUserLikes();
-      } catch (err: any) {
-        console.error('Error loading data:', err);
-        
-        if (err?.response?.status === 401) {
-          setError('Sua sessão expirou. Por favor, faça login novamente.');
-        } else {
-          setError('Erro ao carregar dados. Tente novamente.');
-        }
-        
-        toast({
-          title: 'Erro',
-          description: 'Falha ao carregar dados.',
-          variant: 'destructive',
-        });
-      } finally {
-        setTopicsLoading(false);
-      }
-    };
-
-    loadData();
-  }, [fetchArticles, fetchUserLikes]);
-
-  // Infinite scroll observer
+  // Infinite scroll observer for pagination
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading) {
-          fetchNextPage();
+        if (entries[0].isIntersecting && activeQuery.hasNextPage && !activeQuery.isFetchingNextPage) {
+          activeQuery.fetchNextPage();
         }
       },
       { threshold: 0.1 }
@@ -110,16 +92,15 @@ export default function Dashboard() {
     }
 
     return () => observer.disconnect();
-  }, [hasMore, loading, fetchNextPage]);
+  }, [activeQuery.hasNextPage, activeQuery.isFetchingNextPage, activeQuery.fetchNextPage]);
 
   // Filter articles based on selected filters
-  useEffect(() => {
-    let filtered = Array.isArray(articles) ? [...articles] : [];
+  const filteredArticles = useMemo(() => {
+    let filtered = [...allArticles];
 
     // If showing only subscribed topics, filter first
     if (showOnlySubscribed && subscribedTopicObjects.length > 0) {
       filtered = filtered.filter((article) => {
-        // Check if article matches any subscribed topic
         for (const subscribedTopic of subscribedTopicObjects) {
           const topicNameLower = subscribedTopic.name.toLowerCase();
           
@@ -143,12 +124,10 @@ export default function Dashboard() {
       filtered = filtered.filter((article) => {
         let matches = false;
 
-        // Check if article is in liked articles (if 'liked' filter is selected)
         if (selectedFilters.has('liked') && likedArticles.has(article.id)) {
           matches = true;
         }
 
-        // Check if article matches any selected topic
         for (const filterId of selectedFilters) {
           if (filterId === 'liked') continue;
           
@@ -174,12 +153,12 @@ export default function Dashboard() {
       });
     }
 
-    setFilteredArticles(filtered);
-  }, [selectedFilters, articles, topics, likedArticles, showOnlySubscribed]);
+    return filtered;
+  }, [selectedFilters, allArticles, topics, likedArticles, showOnlySubscribed]);
 
-  const handleSearch = async (query: string) => {
+  const handleSearch = (query: string) => {
     setSearchQuery(query);
-    await searchArticles(query);
+    setSelectedFilters(new Set(['all']));
   };
 
   const handleArticleLikeChanged = (articleId: string, isLiked: boolean) => {
@@ -190,20 +169,16 @@ export default function Dashboard() {
     setSelectedFilters((prev) => {
       const newFilters = new Set(prev);
 
-      // If clicking 'all', clear all filters and select only 'all'
       if (filterId === 'all') {
         return new Set(['all']);
       }
 
-      // If 'all' is selected and clicking another filter, remove 'all' and add the new filter
       if (newFilters.has('all')) {
         newFilters.delete('all');
       }
 
-      // Toggle the selected filter
       if (newFilters.has(filterId)) {
         newFilters.delete(filterId);
-        // If no filters are selected, select 'all'
         if (newFilters.size === 0) {
           newFilters.add('all');
         }
@@ -211,7 +186,6 @@ export default function Dashboard() {
         newFilters.add(filterId);
       }
 
-      // Check if all subscribed topics are selected (excluding 'all' and 'liked')
       const allTopicsSelected = subscribedTopicObjects.every((topic) =>
         newFilters.has(topic.id)
       );
@@ -221,7 +195,6 @@ export default function Dashboard() {
         !newFilters.has('all') &&
         !newFilters.has('liked');
 
-      // If all subscribed topics are selected and nothing else, reset to 'all'
       if (allTopicsSelected && onlyTopicsSelected) {
         return new Set(['all']);
       }
@@ -229,6 +202,11 @@ export default function Dashboard() {
       return newFilters;
     });
   };
+
+  // Check for errors from queries
+  const isLoading = activeQuery.isLoading || topicsQuery.isLoading;
+  const error = activeQuery.error || topicsQuery.error;
+  const hasMore = activeQuery.hasNextPage ?? false;
 
   return (
     <Layout>
@@ -363,7 +341,7 @@ export default function Dashboard() {
             )}
 
             {/* Invitation to subscribe to topics */}
-            {!topicsLoading && subscribedTopicObjects.length === 0 && (
+            {!topicsQuery.isLoading && subscribedTopicObjects.length === 0 && (
               <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 mt-4">
                 <div className="flex items-start gap-3">
                   <div className="flex-1">
@@ -391,7 +369,7 @@ export default function Dashboard() {
               Últimos Artigos
             </h2>
             <span className="text-sm text-muted-foreground">
-              {loading && articles.length === 0 ? (
+              {isLoading && allArticles.length === 0 ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 `${filteredArticles.length} artigo${filteredArticles.length !== 1 ? 's' : ''}`
@@ -399,13 +377,15 @@ export default function Dashboard() {
             </span>
           </div>
 
-          {loading && articles.length === 0 ? (
+          {isLoading && allArticles.length === 0 ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-accent" />
             </div>
           ) : error ? (
             <div className="text-center py-12">
-              <p className="text-destructive">{error}</p>
+              <p className="text-destructive">
+                {error instanceof Error ? error.message : 'Erro ao carregar dados. Tente novamente.'}
+              </p>
             </div>
           ) : filteredArticles.length > 0 ? (
             <>

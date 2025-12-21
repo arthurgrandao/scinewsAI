@@ -1,7 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { useEffect, useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
-import { articlesApi } from '@/lib/apiService';
 import { Article as ArticleType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { LikeButton } from '@/components/articles/LikeButton';
@@ -18,39 +16,13 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
+import { useArticleById } from '@/hooks/useArticles';
 
 export default function Article() {
   const { id } = useParams<{ id: string }>();
-  const [article, setArticle] = useState<ArticleType | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: article, isLoading, error } = useArticleById(id || '', !!id);
 
-  useEffect(() => {
-    const loadArticle = async () => {
-      if (!id) return;
-      
-      try {
-        setLoading(true);
-        const data = await articlesApi.getById(id);
-        setArticle(data);
-        setError(null);
-      } catch (err) {
-        console.error('Error loading article:', err);
-        setError('Erro ao carregar artigo. Tente novamente.');
-        toast({
-          title: 'Erro',
-          description: 'Falha ao carregar artigo.',
-          variant: 'destructive',
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadArticle();
-  }, [id]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <Layout>
         <div className="container py-16 flex justify-center">
@@ -66,7 +38,7 @@ export default function Article() {
         <div className="container py-16 text-center">
           <h1 className="font-serif text-2xl font-bold mb-4">Artigo não encontrado</h1>
           <p className="text-muted-foreground mb-8">
-            {error || 'O artigo que você está procurando não existe.'}
+            {error instanceof Error ? error.message : 'O artigo que você está procurando não existe.'}
           </p>
           <Button variant="scholarly" asChild>
             <Link to="/dashboard">Voltar para artigos</Link>
