@@ -8,7 +8,7 @@ services:
       POSTGRES_DB: scinewsai
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./web/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # - ./web/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
     healthcheck:
@@ -54,7 +54,7 @@ services:
   # FastAPI Backend
   backend:
     build:
-      context: ./web/backend
+      context: ./backend
       dockerfile: Dockerfile
     container_name: scinewsai-backend
     environment:
@@ -65,7 +65,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./web/backend:/app
+      - ./backend:/app
     depends_on:
       db:
         condition: service_healthy
@@ -76,7 +76,7 @@ services:
   # React Frontend (for local development)
   frontend:
     build:
-      context: ./web/frontend
+      context: ./frontend
       dockerfile: Dockerfile.dev
     container_name: scinewsai-frontend
     environment:
@@ -84,7 +84,7 @@ services:
     ports:
       - "5173:5173"
     volumes:
-      - ./web/frontend:/app
+      - ./frontend:/app
       - /app/node_modules
     depends_on:
       - backend
