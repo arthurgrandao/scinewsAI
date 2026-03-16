@@ -3,8 +3,8 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from app.db.database import get_db
-from app.models.article import Article
+from shared.db.database import get_db
+from shared.models.article import Article
 from app.schemas.article import ArticleResponse, ArticleListResponse
 from app.core.security import get_current_user
 

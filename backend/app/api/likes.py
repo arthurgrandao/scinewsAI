@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.db.database import get_db
-from app.models.like import Like
-from app.models.article import Article
+from shared.db.database import get_db
+from shared.models.like import Like
+from shared.models.article import Article
 from app.schemas.like import LikeResponse, LikeCountResponse
 from app.core.security import get_current_user
 

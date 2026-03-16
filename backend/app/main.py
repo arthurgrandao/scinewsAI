@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.api import auth, articles, topics, users, newsletter, likes
 from app.core.config import settings
-from app.db.database import engine, Base
+from shared.db.database import engine, Base
 
 
 @asynccontextmanager

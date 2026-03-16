@@ -20,15 +20,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Import the application's settings and metadata
 from app.core.config import Settings
-from app.db.database import Base, engine as db_engine
+from shared.db.database import Base, engine as db_engine
 
 # Import all models to ensure they are registered with SQLAlchemy's metadata
 import pkgutil
 import importlib
-import app.models as models
+import shared.models as models
 
 for _, module_name, _ in pkgutil.iter_modules(models.__path__):
-    importlib.import_module(f"app.models.{module_name}")
+    importlib.import_module(f"shared.models.{module_name}")
 
 settings = Settings()
 

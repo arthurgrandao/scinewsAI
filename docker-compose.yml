@@ -17,38 +17,100 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
-    build: 
-      context: ./ai_translator
-      dockerfile: Dockerfile
-    volumes:
-      - ./chroma_db:/app/chroma_db
-      - ./data:/app/data
-    env_file:
-      - ./ai_translator/.env
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: scinewsai-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  celery_worker_scraper:
+    build:
+      context: .
+      dockerfile: workers/paper_scraper/Dockerfile
+    container_name: scinewsai-celery-worker-scraper
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/scinewsai
-      - LLM_PROVIDER=openai
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=rpc://
+      - CELERY_TIMEZONE=America/Sao_Paulo
+      - CELERY_QUEUE_SCRAPER=scraper
+      - CELERY_QUEUE_TRANSLATOR=translator
+      - S2_API_KEY=${S2_API_KEY:-}
+      - PYTHONPATH=/app
+    working_dir: /app
     depends_on:
       db:
         condition: service_healthy
-    command: ["db", "--loop"]
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./workers:/app/workers
+      - ./shared:/app/shared
+      - ./workers/paper_scraper/articles_pdf:/app/articles_pdf
+    command: ["celery", "-A", "shared.celery.app:celery_app", "worker", "--loglevel=info", "-Q", "scraper"]
     restart: unless-stopped
 
-  scraper:
+  celery_worker_translator:
     build:
-      context: ./paper_scraper
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: workers/ai_translator/Dockerfile
+    container_name: scinewsai-celery-worker-translator
+    env_file:
+      - ./workers/ai_translator/.env
     environment:
-      - EXECUTION_MODE=auto
-      - RUN_ON_START=true
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=scinews
-      - DATABASE_URL=postgresql://user:password@db:5432/scinews
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/scinewsai
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=rpc://
+      - CELERY_TIMEZONE=America/Sao_Paulo
+      - CELERY_QUEUE_SCRAPER=scraper
+      - CELERY_QUEUE_TRANSLATOR=translator
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - PYTHONPATH=/app
+    working_dir: /app
     depends_on:
       db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./workers:/app/workers
+      - ./shared:/app/shared
+    command: ["celery", "-A", "shared.celery.app:celery_app", "worker", "--loglevel=info", "-Q", "translator"]
+    restart: unless-stopped
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: workers/paper_scraper/Dockerfile
+    container_name: scinewsai-celery-beat
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/scinewsai
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=rpc://
+      - CELERY_TIMEZONE=America/Sao_Paulo
+      - CELERY_QUEUE_SCRAPER=scraper
+      - CELERY_QUEUE_TRANSLATOR=translator
+      - CELERY_DAILY_SCRAPE_TASK=workers.paper_scraper.celery_tasks.run_curation_pipeline_task
+      - PYTHONPATH=/app
+    working_dir: /app
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./workers:/app/workers
+      - ./shared:/app/shared
+    command: ["celery", "-A", "shared.celery.app:celery_app", "beat", "--loglevel=info"]
     restart: unless-stopped
 
   # FastAPI Backend
@@ -61,11 +123,13 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/scinewsai
       - DEBUG=true
       - SECRET_KEY=dev-secret-key-change-in-production
+      - PYTHONPATH=/app
       # - REDIS_URL=redis://redis:6379/0
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./shared:/app/shared
     depends_on:
       db:
         condition: service_healthy

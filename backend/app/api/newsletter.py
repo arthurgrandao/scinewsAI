@@ -2,11 +2,11 @@ from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
-from app.db.database import get_db
-from app.models.article import Article
-from app.models.topic import Topic
-from app.models.subscription import Subscription
-from app.models.user import User
+from shared.db.database import get_db
+from shared.models.article import Article
+from shared.models.topic import Topic
+from shared.models.subscription import Subscription
+from shared.models.user import User
 from app.schemas.article import ArticleResponse
 
 router = APIRouter()

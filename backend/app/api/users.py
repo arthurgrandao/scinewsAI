@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.database import get_db
-from app.models.user import User
-from app.models.topic import Topic
-from app.models.subscription import Subscription
+from shared.db.database import get_db
+from shared.models.user import User
+from shared.models.topic import Topic
+from shared.models.subscription import Subscription
 from app.schemas.user import UserResponse, UserUpdate
 from app.core.security import get_current_user
 
