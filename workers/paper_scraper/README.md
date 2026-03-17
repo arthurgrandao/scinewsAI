@@ -45,13 +45,26 @@ $$
 
 ```bash
 paper_scraper/
-├── articles_pdf/       # Diretório onde os PDFs baixados são salvos
 ├── modules/            # Módulos com a lógica de negócio (conexão, rede, scraping)
+│   ├── pipeline.py      # Orquestra as fases da curadoria
+│   ├── semantic_audit.py# Scoring com Semantic Scholar
+│   ├── pdf_processing.py# Download de PDF em memoria
+│   └── repository.py    # Persistencia no banco
 ├── init_db.py          # Script para inicializar as tabelas no banco
 ├── main.py             # Script principal de execução do scraper
 ├── docker-compose.yaml # Definição do serviço de Banco de Dados
 └── .env                # Variáveis de ambiente (não versionado)
 ```
+
+## Persistencia de PDF
+
+Os PDFs nao sao mais gravados no filesystem local. O pipeline agora:
+
+1. Faz download do PDF para memória (bytes)
+2. Extrai o texto diretamente desses bytes
+3. Persiste apenas o conteudo textual no banco
+
+Isso reduz I/O em disco e simplifica execução em contâineres efemêros.
 
 ## Pré-requisitos
 

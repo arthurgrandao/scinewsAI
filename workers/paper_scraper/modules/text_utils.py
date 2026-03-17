@@ -7,10 +7,10 @@ def clean_text(text_data):
     if not text_data: return None
     return re.sub(r'\s+', ' ', text_data).strip()
 
-def extract_full_text_from_pdf(pdf_path):
-    """Extrai texto de um arquivo PDF local."""
+def extract_full_text_from_pdf_bytes(pdf_bytes):
+    """Extrai texto de um PDF em memoria, sem escrever no filesystem."""
     try:
-        doc = fitz.open(pdf_path)
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         full_text = ""
         for page in doc:
             full_text += page.get_text()

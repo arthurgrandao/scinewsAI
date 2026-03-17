@@ -1,6 +1,6 @@
 from shared.celery.app import celery_app
 
-from workers.paper_scraper.main import run_curation_pipeline
+from workers.paper_scraper.modules.pipeline import run_curation_pipeline
 
 
 @celery_app.task(
