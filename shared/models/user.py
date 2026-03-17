@@ -9,9 +9,9 @@ from shared.db.database import Base
 
 
 class ProfileType(str, enum.Enum):
-    STUDENT = "student"
-    EDUCATOR = "educator"
-    ENTHUSIAST = "enthusiast"
+    BEGINNER = "BEGINNER"
+    INTERMEDIATE = "INTERMEDIATE"
+    ADVANCED = "ADVANCED"
 
 
 class User(Base):
@@ -21,7 +21,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     name = Column(String(255), nullable=False)
-    profile_type = Column(Enum(ProfileType), default=ProfileType.STUDENT)
+    profile_type = Column(Enum(ProfileType), default=ProfileType.BEGINNER, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

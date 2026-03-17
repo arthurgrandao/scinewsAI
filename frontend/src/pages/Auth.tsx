@@ -21,7 +21,7 @@ const signupSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirmPassword: z.string(),
-  profileType: z.enum(['student', 'educator', 'enthusiast']),
+  profileType: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ['confirmPassword'],
@@ -29,21 +29,21 @@ const signupSchema = z.object({
 
 const profileTypes: { value: ProfileType; label: string; description: string; icon: React.ElementType }[] = [
   {
-    value: 'student',
-    label: 'Estudante',
+    value: 'BEGINNER',
+    label: 'Iniciante',
     description: 'Aprendendo e explorando o campo',
     icon: GraduationCap,
   },
   {
-    value: 'educator',
-    label: 'Educador',
-    description: 'Ensinando e compartilhando conhecimento',
+    value: 'INTERMEDIATE',
+    label: 'Intermediário',
+    description: 'Familiarizado com conceitos científicos',
     icon: Briefcase,
   },
   {
-    value: 'enthusiast',
-    label: 'Entusiasta',
-    description: 'Curioso sobre tecnologia',
+    value: 'ADVANCED',
+    label: 'Avançado',
+    description: 'Entusiasta e conhecedor de ciência',
     icon: Heart,
   },
 ];
@@ -60,7 +60,7 @@ export default function Auth() {
     email: '',
     password: '',
     confirmPassword: '',
-    profileType: 'student' as ProfileType,
+    profileType: 'BEGINNER' as ProfileType,
   });
 
   const { login, signup, isAuthenticated, isLoading: authLoading } = useAuth();

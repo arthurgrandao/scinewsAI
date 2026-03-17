@@ -17,7 +17,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  profile_type: 'student' | 'educator' | 'enthusiast';
+  profile_type: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
   subscribed_topics: string[];
   created_at: string;
 }
@@ -29,4 +29,4 @@ export interface Topic {
   slug: string;
 }
 
-export type ProfileType = 'student' | 'educator' | 'enthusiast';
+export type ProfileType = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';

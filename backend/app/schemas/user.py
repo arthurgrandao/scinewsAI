@@ -6,16 +6,16 @@ from enum import Enum
 
 
 class ProfileType(str, Enum):
-    student = "student"
-    educator = "educator"
-    enthusiast = "enthusiast"
+    beginner = "BEGINNER"
+    intermediate = "INTERMEDIATE"
+    advanced = "ADVANCED"
 
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
     name: str
-    profile_type: ProfileType = ProfileType.student
+    profile_type: ProfileType = ProfileType.beginner
 
 
 class UserLogin(BaseModel):

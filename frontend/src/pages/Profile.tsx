@@ -24,21 +24,21 @@ import { useTopics, useSubscribeTopic, useUnsubscribeTopic } from '@/hooks/index
 
 const profileTypes: { value: ProfileType; label: string; description: string; icon: React.ElementType }[] = [
   {
-    value: 'student',
-    label: 'Estudante',
-    description: 'Aprendendo e explorando a área',
+    value: 'BEGINNER',
+    label: 'Iniciante',
+    description: 'Aprendendo e explorando o campo',
     icon: GraduationCap,
   },
   {
-    value: 'educator',
-    label: 'Educador',
-    description: 'Ensinando e compartilhando conhecimento',
+    value: 'INTERMEDIATE',
+    label: 'Intermediário',
+    description: 'Familiarizado com conceitos científicos',
     icon: Briefcase,
   },
   {
-    value: 'enthusiast',
-    label: 'Entusiasta',
-    description: 'Curioso sobre tecnologia',
+    value: 'ADVANCED',
+    label: 'Avançado',
+    description: 'Entusiasta e conhecedor de ciência',
     icon: Heart,
   },
 ];
@@ -46,7 +46,7 @@ const profileTypes: { value: ProfileType; label: string; description: string; ic
 export default function Profile() {
   const { user, setUser } = useAuth();
   const [name, setName] = useState(user?.name || '');
-  const [profileType, setProfileType] = useState<ProfileType>(user?.profile_type || 'student');
+  const [profileType, setProfileType] = useState<ProfileType>(user?.profile_type || 'BEGINNER');
   const [isSaving, setIsSaving] = useState(false);
   const [togglingTopics, setTogglingTopics] = useState<Set<string>>(new Set());
   const [topicsExpanded, setTopicsExpanded] = useState(false);
