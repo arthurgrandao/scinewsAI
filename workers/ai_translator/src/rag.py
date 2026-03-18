@@ -1,6 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
+from typing import Literal
 
 from .config import get_llm, get_embeddings, get_settings
 
@@ -20,37 +21,62 @@ def get_retriever():
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
-FINAL_PROMPT_TEMPLATE = """You are an expert science communicator and translator. Your goal is to explain complex scientific concepts
-from the provided research paper in a clear, accessible, and friendly way to a general audience, while maintaining accuracy.
+SUMMARY_LEVELS = ("BEGINNER", "INTERMEDIATE", "ADVANCED")
 
-Analyse the provided text and generate a comprehensive summary structured into the following sections. Ensure each section is detailed yet easy to understand.
+LEVEL_INSTRUCTIONS = {
+    "BEGINNER": (
+        "Explique para iniciantes absolutos. Evite jargoes quando possivel, "
+        "defina termos tecnicos quando inevitaveis e use analogias simples."
+    ),
+    "INTERMEDIATE": (
+        "Explique para leitores com base tecnica inicial. Pode usar termos da area, "
+        "mas contextualize rapidamente conceitos mais especificos."
+    ),
+    "ADVANCED": (
+        "Explique para leitores avancados. Mantenha alto rigor tecnico, inclua "
+        "detalhes metodologicos e nuances de limitacoes/validade."
+    ),
+}
 
-Structure your response as follows:
+FINAL_PROMPT_TEMPLATE = """Voce e um comunicador cientifico especialista.
 
-# Title & Overview
-Give a catchy title and a brief high-level overview of what the paper is about.
+Sua tarefa e resumir o texto de um artigo cientifico em PORTUGUES DO BRASIL (pt-BR),
+com tom claro e fiel ao conteudo original.
 
-## 1. Introduction & Problem Statement
-- What is the context?
-- What problem are the researchers trying to solve?
-- Why is this important?
+Nivel de explicacao alvo: {level}
+Instrucao de nivel: {level_instructions}
 
-## 2. Methodology & Approach
-- How did they approach the problem?
-- What methods or experiments did they use? (Explain simply)
+Regras obrigatorias:
+- Responda somente em portugues do Brasil.
+- Nao invente resultados ou metricas que nao estejam no texto.
+- Seja didatico, objetivo e mantenha precisao cientifica.
 
-## 3. Key Results & Findings
-- What did they find?
-- Provide specific interesting data points or discoveries.
+Estrutura da resposta (markdown):
 
-## 4. Conclusion & Implications
-- What do these results mean?
-- How does this impact the field or the real world?
+# Titulo e Visao Geral
+Crie um titulo claro e um resumo executivo curto.
 
-Text to process:
+## 1. Contexto e Problema
+- Qual e o contexto do estudo?
+- Qual problema os autores tentam resolver?
+- Por que isso importa?
+
+## 2. Metodologia
+- Como o problema foi abordado?
+- Quais tecnicas, experimentos ou estrategias foram usados?
+
+## 3. Principais Resultados
+- Quais foram os achados centrais?
+- Cite evidencias relevantes presentes no texto.
+
+## 4. Conclusoes e Implicacoes
+- O que esses resultados significam?
+- Quais impactos ou aplicacoes praticas sao sugeridos?
+
+Texto para processar:
 {context}
 
-Answer (in accessible, friendly, yet accurate markdown):"""
+Resposta (em markdown, pt-BR):"""
 
 def query_rag(query: str = "Provide a comprehensive summary of this research paper") -> str:
     llm = get_llm()
@@ -59,7 +85,12 @@ def query_rag(query: str = "Provide a comprehensive summary of this research pap
     prompt = ChatPromptTemplate.from_template(FINAL_PROMPT_TEMPLATE)
     
     rag_chain = (
-        {"context": retriever | format_docs, "query": RunnablePassthrough()}
+        {
+            "context": retriever | format_docs,
+            "query": RunnablePassthrough(),
+            "level": lambda _: "INTERMEDIATE",
+            "level_instructions": lambda _: LEVEL_INSTRUCTIONS["INTERMEDIATE"],
+        }
         | prompt
         | llm
         | StrOutputParser()
@@ -67,15 +98,22 @@ def query_rag(query: str = "Provide a comprehensive summary of this research pap
 
     return rag_chain.invoke(query)
 
-def translate_text(text: str) -> str:
+def translate_text(text: str, level: Literal["BEGINNER", "INTERMEDIATE", "ADVANCED"]) -> str:
     """
-    Translates/Simplifies the given text using the LLM directly, bypassing retrieval.
+    Generate a level-specific summary in pt-BR directly from article text.
     """
+    if level not in SUMMARY_LEVELS:
+        raise ValueError(f"Nivel de resumo invalido: {level}")
+
     llm = get_llm()
     prompt = ChatPromptTemplate.from_template(FINAL_PROMPT_TEMPLATE)
     
     chain = (
-        {"context": lambda x: x}
+        {
+            "context": lambda x: x,
+            "level": lambda _: level,
+            "level_instructions": lambda _: LEVEL_INSTRUCTIONS[level],
+        }
         | prompt
         | llm
         | StrOutputParser()

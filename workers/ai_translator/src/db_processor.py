@@ -1,6 +1,6 @@
 import logging
 import time
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from shared.db.database import Base, SessionLocal, engine
 from shared.models.article import Article
 from .rag import translate_text
@@ -8,6 +8,15 @@ from .rag import translate_text
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+
+SUMMARY_LEVELS = ("BEGINNER", "INTERMEDIATE", "ADVANCED")
+SUMMARY_FIELD_BY_LEVEL = {
+    "BEGINNER": "simplified_text_beginner",
+    "INTERMEDIATE": "simplified_text_intermediate",
+    "ADVANCED": "simplified_text_advanced",
+}
+LLM_SLEEP_SECONDS = 22
 
 
 def process_article(article_id: str) -> dict:
@@ -24,7 +33,11 @@ def process_article(article_id: str) -> dict:
             logger.warning("Article %s has no full_text", article_id)
             return {"status": "missing_full_text", "article_id": article_id}
 
-        if article.simplified_text:
+        has_all_summaries = all(
+            getattr(article, SUMMARY_FIELD_BY_LEVEL[level])
+            for level in SUMMARY_LEVELS
+        )
+        if has_all_summaries:
             logger.info("Article %s already translated, skipping", article_id)
             return {"status": "already_translated", "article_id": article_id}
 
@@ -32,9 +45,18 @@ def process_article(article_id: str) -> dict:
         article.processing_status = "translating"
         session.commit()
 
-        translated_content = translate_text(article.full_text)
-        article.simplified_text = translated_content
-        article.processing_status = "translated"
+        for index, level in enumerate(SUMMARY_LEVELS):
+            translated_content = translate_text(article.full_text, level=level)
+            setattr(article, SUMMARY_FIELD_BY_LEVEL[level], translated_content)
+
+            if index < len(SUMMARY_LEVELS) - 1:
+                logger.info(
+                    "Sleeping %ss before next LLM request for article %s",
+                    LLM_SLEEP_SECONDS,
+                    article_id,
+                )
+                time.sleep(LLM_SLEEP_SECONDS)
+
         session.commit()
 
         elapsed = time.time() - start_time
@@ -53,7 +75,7 @@ def process_article(article_id: str) -> dict:
 
 def process_articles(loop: bool = False, sleep_interval: int = 60):
     """
-    Fetches articles from DB with null simplified_text and full_text available,
+    Fetches articles from DB with pending level summaries and full_text available,
     translates them, and saves back to DB.
     """
     logger.info("Starting article processing service...")
@@ -68,7 +90,11 @@ def process_articles(loop: bool = False, sleep_interval: int = 60):
             # Query for articles that need processing
             stmt = select(Article).where(
                 and_(
-                    Article.simplified_text.is_(None),
+                    or_(
+                        Article.simplified_text_beginner.is_(None),
+                        Article.simplified_text_intermediate.is_(None),
+                        Article.simplified_text_advanced.is_(None),
+                    ),
                     Article.full_text.is_not(None)
                 )
             )

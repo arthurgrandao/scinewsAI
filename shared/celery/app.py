@@ -45,7 +45,7 @@ celery_app.conf.update(
 celery_app.autodiscover_tasks(
     [
         "workers.paper_scraper",
-        # "workers.ai_translator.src",
+        "workers.ai_translator.src",
     ],
     related_name="celery_tasks",
 )
