@@ -1,7 +1,5 @@
-from sqlalchemy import Column, String, Text, Date, DateTime, ARRAY
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Text, Date, DateTime, ARRAY, Float
 from datetime import datetime
-import uuid
 
 from shared.db.database import Base
 
@@ -13,6 +11,7 @@ class Article(Base):
     title = Column(Text, nullable=False)
     authors = Column(ARRAY(Text), nullable=True)
     publication_date = Column(Date, nullable=True, index=True)
+    relevance_score = Column(Float, nullable=True, index=True)
     abstract = Column(Text, nullable=True)
     keywords = Column(ARRAY(Text), nullable=True)
     full_text = Column(Text, nullable=True)
